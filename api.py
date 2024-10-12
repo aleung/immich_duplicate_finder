@@ -6,7 +6,7 @@ from db import bytes_to_megabytes
 from pillow_heif import register_heif_opener
 import os
 
-@st.cache_data(show_spinner=True) 
+@st.cache_data(show_spinner=True)
 def fetchAssets(immich_server_url, api_key, timeout, type):
     # Initialize messaging and progress
     if 'fetch_message' not in st.session_state:
@@ -18,26 +18,44 @@ def fetchAssets(immich_server_url, api_key, timeout, type):
 
     # Remove trailing slash from immich_server_url if present
     base_url = immich_server_url.rstrip('/')
-    asset_info_url = f"{base_url}/api/asset/"
-    
+    asset_paths_url = f"{base_url}/api/view/folder/unique-paths"
+    asset_info_url = f"{base_url}/api/view/folder"
+
     try:
         with st.spinner('Fetching assets...'):
-            # Make the HTTP GET request
-            response = requests.get(asset_info_url, headers={'Accept': 'application/json', 'x-api-key': api_key}, verify=False, timeout=timeout)
+            # Fetch unique paths
+            response = requests.get(asset_paths_url, headers={'Accept': 'application/json', 'x-api-key': api_key}, verify=False, timeout=timeout)
             response.raise_for_status()  # This will raise an exception for HTTP errors
-            
+
             content_type = response.headers.get('Content-Type', '')
             if 'application/json' in content_type:
                 if response.text:
-                    assets = response.json()  # Decode JSON response into a list of assets
-                    assets = [asset for asset in assets if asset.get("type") == type]                       
-                    st.session_state['fetch_message'] = 'Assets fetched successfully!'
+                    paths = response.json()  # Decode JSON response into a list of paths
                 else:
                     st.session_state['fetch_message'] = 'Received an empty response.'
-                    assets = []  # Set assets to empty list if response is empty
+                    paths = []  # Set paths to empty list if response is empty
             else:
                 st.session_state['fetch_message'] = f'Unexpected Content-Type: {content_type}\nResponse content: {response.text}'
-                assets = []  # Set assets to empty list if unexpected content type
+                paths = []  # Set paths to empty list if unexpected content type
+
+            # Fetch assets for each path
+            for path in paths:
+                if path:
+                    response = requests.get(f'{asset_info_url}?path={path}', headers={'Accept': 'application/json', 'x-api-key': api_key}, verify=False, timeout=timeout)
+                    response.raise_for_status()
+
+                    content_type = response.headers.get('Content-Type', '')
+                    if 'application/json' in content_type:
+                        if response.text:
+                            assets.extend(response.json())  # Add assets from the current path
+                        else:
+                            st.session_state['fetch_message'] = 'Received an empty response for path.'
+                    else:
+                        st.session_state['fetch_message'] = f'Unexpected Content-Type for path: {content_type}\nResponse content: {response.text}'
+
+            # Filter assets by type
+            assets = [asset for asset in assets if asset.get("type") == type]
+            st.session_state['fetch_message'] = 'Assets fetched successfully!'
 
     except requests.exceptions.ConnectTimeout:
         st.session_state['fetch_message'] = 'Failed to connect to the server. Please check your network connection and try again.'
@@ -59,9 +77,9 @@ def getImage(asset_id, immich_server_url,photo_choice,api_key):
     register_heif_opener()
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     if photo_choice == 'Thumbnail (fast)':
-        response = requests.request("GET", f"{immich_server_url}/api/asset/thumbnail/{asset_id}?format=JPEG", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
+        response = requests.request("GET", f"{immich_server_url}/api/assets/{asset_id}/thumbnail?size=thumbnail", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
     else:
-        asset_download_url = f"{immich_server_url}/api/download/asset/{asset_id}"
+        asset_download_url = f"{immich_server_url}/api/download/assets/{asset_id}"
         response = requests.post(asset_download_url, headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
         
     if response.status_code == 200 and 'image/' in response.headers.get('Content-Type', ''):
@@ -121,7 +139,7 @@ def getServerStatistics(immich_server_url, api_key):
     
 def deleteAsset(immich_server_url, asset_id, api_key):
     st.session_state['show_faiss_duplicate'] = False
-    url = f"{immich_server_url}/api/asset"
+    url = f"{immich_server_url}/api/assets"
     payload = json.dumps({
         "force": True,
         "ids": [asset_id]
@@ -150,7 +168,7 @@ def deleteAsset(immich_server_url, asset_id, api_key):
         return False
 
 def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, description, isFavorite, latitude, longitude, isArchived):
-    url = f"{immich_server_url}/api/asset/{asset_id}"  # Ensure the URL is constructed correctly
+    url = f"{immich_server_url}/api/assets/{asset_id}"  # Ensure the URL is constructed correctly
     
     payload = json.dumps({
         "dateTimeOriginal": dateTimeOriginal,
@@ -190,7 +208,7 @@ def getVideoAndSave(asset_id, immich_server_url,api_key,save_directory):
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
 
-    response = requests.get(f"{immich_server_url}/api/download/asset/{asset_id}", headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
+    response = requests.get(f"{immich_server_url}/api/download/assets/{asset_id}", headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
     file_path = os.path.join(save_directory, f"{asset_id}.mp4")
 
     if response.status_code == 200 and 'video/' in response.headers.get('Content-Type', ''):
