@@ -136,7 +136,7 @@ def getServerStatistics(immich_server_url, api_key):
             return None
     except:
         return None
-    
+
 def deleteAsset(immich_server_url, asset_id, api_key):
     st.session_state['show_faiss_duplicate'] = False
     url = f"{immich_server_url}/api/assets"
@@ -152,12 +152,15 @@ def deleteAsset(immich_server_url, asset_id, api_key):
     try:
         response = requests.delete(url, headers=headers, data=payload)
         if response.status_code == 204:
-            st.success(f"Successfully deleted asset with ID: {asset_id}")
+            st.write(f"Successfully deleted asset with ID: {asset_id}")
             print(f"Successfully deleted asset with ID: {asset_id}")
             return True
         else:
             # Provide more detailed error feedback
-            error_message = response.json().get('message', 'No additional error message provided.')
+            try:
+                error_message = response.json().get('message', 'No additional error message provided.')
+            except ValueError:
+                error_message = 'Response content is not valid JSON.'
             st.error(f"Failed to delete asset with ID: {asset_id}. Status code: {response.status_code}. Message: {error_message}")
             print(f"Failed to delete asset with ID: {asset_id}. Status code: {response.status_code}. Message: {error_message}")
             return False

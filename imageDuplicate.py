@@ -282,16 +282,24 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                     if original_path_2.startswith('/libraries/Recovered'):
                         st.session_state['selected_images'].discard(asset_id_2)
 
-        with col_delete:
-            if st.session_state['selected_images']:
-                delete_clicked = st.button('Delete selected images')
-                if delete_clicked:
-                    st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
-                    confirm = st.checkbox('Yes, I want to delete the selected images.')
+        # Display selected images at the top
+        if st.session_state['selected_images']:
+            st.write('**Selected images for deletion:**')
+            for asset_id in st.session_state['selected_images']:
+                st.write(f"Asset ID: {asset_id}")
+
+            # Use a form to group delete button and confirmation checkbox
+            with st.form(key='delete_form'):
+                st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
+                confirm = st.checkbox('Yes, I want to delete the selected images.')
+                submit_delete = st.form_submit_button('Delete selected images')
+                if submit_delete:
                     if confirm:
                         # Proceed with deletion
                         for asset_id in st.session_state['selected_images']:
-                            deleteAsset(immich_server_url, asset_id, api_key)
+                            deletion_result = deleteAsset(immich_server_url, asset_id, api_key)
+                            if not deletion_result:
+                                st.error(f"Failed to delete asset with ID: {asset_id}")
                         st.success('Selected images have been deleted.')
                         st.session_state['selected_images'].clear()
                         # Reset individual checkbox states
@@ -300,14 +308,8 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                                 st.session_state[key] = False
                     else:
                         st.info('Please confirm deletion by checking the box above.')
-            else:
-                st.write('No images selected for deletion.')
-
-        # Display selected images at the top
-        if st.session_state['selected_images']:
-            st.write('**Selected images for deletion:**')
-            for asset_id in st.session_state['selected_images']:
-                st.write(f"Asset ID: {asset_id}")
+        else:
+            st.write('No images selected for deletion.')
 
         progress_bar = st.progress(0)
         num_duplicates_to_show = min(len(duplicates), limit)
@@ -394,8 +396,3 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
         progress_bar.progress(100)
     else:
         st.write("No duplicates found.")
-
-
-
-
-
