@@ -252,15 +252,13 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
 
     if duplicates:
         st.write(f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
-        progress_bar = st.progress(0)
-        num_duplicates_to_show = min(len(duplicates), limit)
 
-        # Add checkboxes to select all or deselect all images in '/libraries/Recovered'
-        col_select_all, col_deselect_all = st.columns(2)
+        # Add buttons and delete functionality at the top
+        col_select_all, col_deselect_all, col_delete = st.columns(3)
         with col_select_all:
             if st.button('Select all images in /libraries/Recovered'):
                 # Add all images in /libraries/Recovered to selected_images
-                for dup_pair in duplicates[:num_duplicates_to_show]:
+                for dup_pair in duplicates[:limit]:
                     asset_id_1, asset_id_2 = dup_pair
                     asset1_info = getAssetInfo(asset_id_1, assets)
                     asset2_info = getAssetInfo(asset_id_2, assets)
@@ -273,7 +271,7 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
         with col_deselect_all:
             if st.button('Deselect all images in /libraries/Recovered'):
                 # Remove all images in /libraries/Recovered from selected_images
-                for dup_pair in duplicates[:num_duplicates_to_show]:
+                for dup_pair in duplicates[:limit]:
                     asset_id_1, asset_id_2 = dup_pair
                     asset1_info = getAssetInfo(asset_id_1, assets)
                     asset2_info = getAssetInfo(asset_id_2, assets)
@@ -283,6 +281,36 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                         st.session_state['selected_images'].discard(asset_id_1)
                     if original_path_2.startswith('/libraries/Recovered'):
                         st.session_state['selected_images'].discard(asset_id_2)
+
+        with col_delete:
+            if st.session_state['selected_images']:
+                delete_clicked = st.button('Delete selected images')
+                if delete_clicked:
+                    st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
+                    confirm = st.checkbox('Yes, I want to delete the selected images.')
+                    if confirm:
+                        # Proceed with deletion
+                        for asset_id in st.session_state['selected_images']:
+                            deleteAsset(immich_server_url, asset_id, api_key)
+                        st.success('Selected images have been deleted.')
+                        st.session_state['selected_images'].clear()
+                        # Reset individual checkbox states
+                        for key in list(st.session_state.keys()):
+                            if key.startswith('select_'):
+                                st.session_state[key] = False
+                    else:
+                        st.info('Please confirm deletion by checking the box above.')
+            else:
+                st.write('No images selected for deletion.')
+
+        # Display selected images at the top
+        if st.session_state['selected_images']:
+            st.write('**Selected images for deletion:**')
+            for asset_id in st.session_state['selected_images']:
+                st.write(f"Asset ID: {asset_id}")
+
+        progress_bar = st.progress(0)
+        num_duplicates_to_show = min(len(duplicates), limit)
 
         for i, dup_pair in enumerate(duplicates[:num_duplicates_to_show]):
             try:
@@ -322,13 +350,41 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                     )
 
                     col1, col2 = st.columns(2)
-                #    with col1:
-                #        st.image(image1, caption=f"Name: {asset_id_1}")
-                #    with col2:
-                #        st.image(image2, caption=f"Name: {asset_id_2}")
 
-                    display_asset_column(col1, asset1_info, asset2_info, asset_id_1,asset_id_2, immich_server_url, api_key)
-                    display_asset_column(col2, asset2_info, asset1_info, asset_id_2,asset_id_1, immich_server_url, api_key)
+                    # Display first image and its checkbox
+                    with col1:
+                        st.image(image1, caption=f"Name: {asset_id_1}")
+                        original_path_1 = asset1_info[5]  # original_path is the 6th item
+                        checkbox_key_1 = f'select_{asset_id_1}'
+                        # Set checkbox value based on whether asset_id_1 is in selected_images
+                        selected_1 = st.checkbox(
+                            f'Select for deletion (Path: {original_path_1})',
+                            value=(asset_id_1 in st.session_state['selected_images']),
+                            key=checkbox_key_1
+                        )
+                        if selected_1:
+                            st.session_state['selected_images'].add(asset_id_1)
+                        else:
+                            st.session_state['selected_images'].discard(asset_id_1)
+
+                    # Display second image and its checkbox
+                    with col2:
+                        st.image(image2, caption=f"Name: {asset_id_2}")
+                        original_path_2 = asset2_info[5]
+                        checkbox_key_2 = f'select_{asset_id_2}'
+                        selected_2 = st.checkbox(
+                            f'Select for deletion (Path: {original_path_2})',
+                            value=(asset_id_2 in st.session_state['selected_images']),
+                            key=checkbox_key_2
+                        )
+                        if selected_2:
+                            st.session_state['selected_images'].add(asset_id_2)
+                        else:
+                            st.session_state['selected_images'].discard(asset_id_2)
+
+                    display_asset_column(col1, asset1_info, asset2_info, asset_id_1, asset_id_2, immich_server_url, api_key)
+                    display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1, immich_server_url, api_key)
+
                 else:
                     st.write(f"Missing information for one or both assets: {asset_id_1}, {asset_id_2}")
 
@@ -339,25 +395,7 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
     else:
         st.write("No duplicates found.")
 
-    # Display selected images
-    if st.session_state['selected_images']:
-        st.write('**Selected images for deletion:**')
-        for asset_id in st.session_state['selected_images']:
-            st.write(f"Asset ID: {asset_id}")
 
-        # Add a delete button
-        if st.button('Delete selected images'):
-            if st.confirm('Are you sure you want to delete the selected images? This action cannot be undone.'):
-                for asset_id in st.session_state['selected_images']:
-                    deleteAsset(immich_server_url, asset_id, api_key)
-                st.success('Selected images have been deleted.')
-                st.session_state['selected_images'].clear()
-                # Reset individual checkbox states
-                for key in list(st.session_state.keys()):
-                    if key.startswith('select_'):
-                        st.session_state[key] = False
-            else:
-                st.write('Deletion canceled.')
 
 
 
