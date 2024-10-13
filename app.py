@@ -100,7 +100,10 @@ def main():
         if not assets:
             st.error("No assets found or failed to fetch assets.")
             return  # Stop further execution since there are no assets to process
-
+        
+        # Remove deleted assets from the assets list
+        if 'deleted_assets' in st.session_state:
+            assets = [asset for asset in assets if asset['id'] not in st.session_state['deleted_assets']]
 
     # Calculate the FAISS index if the corresponding flag is set
     if st.session_state['calculate_faiss'] and assets:

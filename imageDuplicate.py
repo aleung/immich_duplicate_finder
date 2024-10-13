@@ -12,7 +12,7 @@ from PIL import Image
 from api import getImage, deleteAsset
 from utility import display_asset_column, is_running_in_container
 from api import getAssetInfo
-from db import load_duplicate_pairs, is_db_populated, save_duplicate_pair
+from db import load_duplicate_pairs, is_db_populated, save_duplicate_pair, remove_deleted_assets_from_db
 from streamlit_image_comparison import image_comparison
 
 # Set the environment variable to allow multiple OpenMP libraries
@@ -241,14 +241,20 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
     # Initialize selected_images in session_state
     if 'selected_images' not in st.session_state:
         st.session_state['selected_images'] = set()
+    if 'deleted_assets' not in st.session_state:
+        st.session_state['deleted_assets'] = set()
 
     # First check if the database is populated
     if not is_db_populated():
         st.write("The database does not contain any duplicate entries. Please generate/update the database.")
         return  # Exit the function early if the database is not populated
 
-    # Load duplicates from database
+    # Load duplicates from database, excluding pairs with deleted assets
     duplicates = load_duplicate_pairs(min_threshold, max_threshold)
+    duplicates = [
+        dup_pair for dup_pair in duplicates
+        if dup_pair[0] not in st.session_state['deleted_assets'] and dup_pair[1] not in st.session_state['deleted_assets']
+    ]
 
     if duplicates:
         st.write(f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
@@ -258,29 +264,62 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
         with col_select_all:
             if st.button('Select all images in /libraries/Recovered'):
                 # Add all images in /libraries/Recovered to selected_images
+                images_selected = False  # Flag to track if any images were selected
                 for dup_pair in duplicates[:limit]:
                     asset_id_1, asset_id_2 = dup_pair
                     asset1_info = getAssetInfo(asset_id_1, assets)
                     asset2_info = getAssetInfo(asset_id_2, assets)
-                    original_path_1 = asset1_info[5]
-                    original_path_2 = asset2_info[5]
-                    if original_path_1.startswith('/libraries/Recovered'):
-                        st.session_state['selected_images'].add(asset_id_1)
-                    if original_path_2.startswith('/libraries/Recovered'):
-                        st.session_state['selected_images'].add(asset_id_2)
+
+                    # Handle asset1_info
+                    if asset1_info:
+                        original_path_1 = asset1_info[5]
+                        if original_path_1.startswith('/libraries/Recovered'):
+                            st.session_state['selected_images'].add(asset_id_1)
+                            images_selected = True
+                    else:
+                        st.write(f"Asset info not found for asset_id: {asset_id_1}")
+
+                    # Handle asset2_info
+                    if asset2_info:
+                        original_path_2 = asset2_info[5]
+                        if original_path_2.startswith('/libraries/Recovered'):
+                            st.session_state['selected_images'].add(asset_id_2)
+                            images_selected = True
+                    else:
+                        st.write(f"Asset info not found for asset_id: {asset_id_2}")
+
+                if not images_selected:
+                    st.info("No duplicates found in /libraries/Recovered.")
+
         with col_deselect_all:
             if st.button('Deselect all images in /libraries/Recovered'):
                 # Remove all images in /libraries/Recovered from selected_images
+                images_deselected = False  # Flag to track if any images were deselected
                 for dup_pair in duplicates[:limit]:
                     asset_id_1, asset_id_2 = dup_pair
                     asset1_info = getAssetInfo(asset_id_1, assets)
                     asset2_info = getAssetInfo(asset_id_2, assets)
-                    original_path_1 = asset1_info[5]
-                    original_path_2 = asset2_info[5]
-                    if original_path_1.startswith('/libraries/Recovered'):
-                        st.session_state['selected_images'].discard(asset_id_1)
-                    if original_path_2.startswith('/libraries/Recovered'):
-                        st.session_state['selected_images'].discard(asset_id_2)
+
+                    # Handle asset1_info
+                    if asset1_info:
+                        original_path_1 = asset1_info[5]
+                        if original_path_1.startswith('/libraries/Recovered'):
+                            st.session_state['selected_images'].discard(asset_id_1)
+                            images_deselected = True
+                    else:
+                        st.write(f"Asset info not found for asset_id: {asset_id_1}")
+
+                    # Handle asset2_info
+                    if asset2_info:
+                        original_path_2 = asset2_info[5]
+                        if original_path_2.startswith('/libraries/Recovered'):
+                            st.session_state['selected_images'].discard(asset_id_2)
+                            images_deselected = True
+                    else:
+                        st.write(f"Asset info not found for asset_id: {asset_id_2}")
+
+                if not images_deselected:
+                    st.info("No images to deselect in /libraries/Recovered.")
 
         # Display selected images at the top
         if st.session_state['selected_images']:
@@ -296,16 +335,26 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                 if submit_delete:
                     if confirm:
                         # Proceed with deletion
+                        deleted_asset_ids = []
                         for asset_id in st.session_state['selected_images']:
                             deletion_result = deleteAsset(immich_server_url, asset_id, api_key)
-                            if not deletion_result:
+                            if deletion_result:
+                                deleted_asset_ids.append(asset_id)
+                            else:
                                 st.error(f"Failed to delete asset with ID: {asset_id}")
+                        if deleted_asset_ids:
+                            # Update the duplicates database
+                            remove_deleted_assets_from_db(deleted_asset_ids)
+                            # Update deleted assets in session state
+                            st.session_state['deleted_assets'].update(deleted_asset_ids)
                         st.success('Selected images have been deleted.')
                         st.session_state['selected_images'].clear()
                         # Reset individual checkbox states
                         for key in list(st.session_state.keys()):
                             if key.startswith('select_'):
-                                st.session_state[key] = False
+                                del st.session_state[key]
+                        # Refresh the display by rerunning the function
+                        st.rerun()
                     else:
                         st.info('Please confirm deletion by checking the box above.')
         else:
@@ -328,10 +377,16 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
 
                 asset_id_1, asset_id_2 = dup_pair
 
-                image1 = getImage(asset_id_1, immich_server_url, 'Thumbnail (fast)', api_key)
-                image2 = getImage(asset_id_2, immich_server_url, 'Thumbnail (fast)', api_key)
                 asset1_info = getAssetInfo(asset_id_1, assets)
                 asset2_info = getAssetInfo(asset_id_2, assets)
+
+                # Skip if asset info is missing
+                if not asset1_info or not asset2_info:
+                    st.write(f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
+                    continue
+
+                image1 = getImage(asset_id_1, immich_server_url, 'Thumbnail (fast)', api_key)
+                image2 = getImage(asset_id_2, immich_server_url, 'Thumbnail (fast)', api_key)
 
                 if image1 is not None and image2 is not None:
                     # Convert PIL images to numpy arrays if necessary
@@ -388,7 +443,7 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
                     display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1, immich_server_url, api_key)
 
                 else:
-                    st.write(f"Missing information for one or both assets: {asset_id_1}, {asset_id_2}")
+                    st.write(f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
 
                 st.markdown("---")
             except Exception as e:
@@ -396,3 +451,4 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
         progress_bar.progress(100)
     else:
         st.write("No duplicates found.")
+
