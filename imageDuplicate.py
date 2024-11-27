@@ -10,7 +10,7 @@ from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 from PIL import Image
 
 from api import getImage
-from utility import display_asset_column
+from utility import display_asset_column, is_running_in_container
 from api import getAssetInfo
 from db import load_duplicate_pairs, is_db_populated, save_duplicate_pair
 from streamlit_image_comparison import image_comparison
@@ -36,8 +36,9 @@ transform = Compose([
 ])
 
 # Global variables for paths
-index_path = 'faiss_index.bin'
-metadata_path = 'metadata.npy'
+data_path = 'data/' if is_running_in_container() else ''
+index_path = data_path + 'faiss_index.bin'
+metadata_path = data_path + 'metadata.npy'
 
 def extract_features(image):
     """Extract features from an image using a pretrained model."""
@@ -62,12 +63,12 @@ def save_faiss_index_and_metadata(index, metadata):
     np.save(metadata_path, np.array(metadata, dtype=object))
 
 def update_faiss_index(immich_server_url,api_key, asset_id):
-    
-    """Update the FAISS index and metadata with a new image and its ID, 
+
+    """Update the FAISS index and metadata with a new image and its ID,
     skipping if the asset_id has already been processed."""
     global index  # Assuming index is defined globally
     index, existing_metadata = init_or_load_faiss_index()
-    
+
     # Check if the asset_id is already in metadata to decide whether to skip processing
     if asset_id in existing_metadata:
         return 'skipped'  # Skip processing this image
@@ -77,15 +78,15 @@ def update_faiss_index(immich_server_url,api_key, asset_id):
         features = extract_features(image)
     else:
         return 'error'
-    
+
     if index is None:
         # Initialize the FAISS index with the correct dimension if it's the first time
         dimension = features.shape[0]
         index = faiss.IndexFlatL2(dimension)
-    
+
     index.add(np.array([features], dtype='float32'))
     existing_metadata.append(asset_id)
-    
+
     save_faiss_index_and_metadata(index, existing_metadata)
     return 'processed'
 
@@ -208,7 +209,7 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold,immi
     if not is_db_populated():
         st.write("The database does not contain any duplicate entries. Please generate/update the database.")
         return  # Exit the function early if the database is not populated
-    
+
     # Load duplicates from database
     duplicates = load_duplicate_pairs(min_threshold, max_threshold)
 
@@ -258,7 +259,7 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold,immi
                 #        st.image(image1, caption=f"Name: {asset_id_1}")
                 #    with col2:
                 #        st.image(image2, caption=f"Name: {asset_id_2}")
-                    
+
                     display_asset_column(col1, asset1_info, asset2_info, asset_id_1,asset_id_2, immich_server_url, api_key)
                     display_asset_column(col2, asset2_info, asset1_info, asset_id_2,asset_id_1, immich_server_url, api_key)
                 else:

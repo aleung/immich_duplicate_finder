@@ -6,5 +6,10 @@ services:
     restart: unless-stopped
     ports:
       - 8501:8501
+    volumes:
+      - ${DUP_FINDER_DATA_LOCATION}/data:/immich_duplicate_finder/data
+      - ${DUP_FINDER_DATA_LOCATION}/cache:/root/.cache/torch/
+    env_file:
+      - .env
     build:
       dockerfile: './Dockerfile'

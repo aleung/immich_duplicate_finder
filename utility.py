@@ -3,11 +3,15 @@ import streamlit as st
 from datetime import datetime
 from api import deleteAsset, updateAsset
 from db import delete_duplicate_pair
+import os
+
+def is_running_in_container():
+    return os.path.exists('/.dockerenv')
 
 def compare_and_color_data(value1, value2):
     date1 = datetime.fromisoformat(value1.rstrip('Z'))
     date2 = datetime.fromisoformat(value2.rstrip('Z'))
-    
+
     # Compare the datetime objects
     if date1 > date2:  # value1 is newer
         return f"<span style='color: red;'>{value1}</span>"

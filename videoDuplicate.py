@@ -8,6 +8,7 @@ from torchvision.models import resnet152, ResNet152_Weights
 from torchvision.transforms import Compose, Resize, ToTensor, Normalize
 
 from api import getVideo
+from utility import is_running_in_container
 
 # Set the environment variable to allow multiple OpenMP libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -22,5 +23,6 @@ transform = Compose([
 ])
 
 # Global variables for paths
-index_path = 'video_faiss_index.bin'
-metadata_path = 'video_metadata.npy'
+data_path = 'data/' if is_running_in_container() else ''
+index_path = data_path + 'video_faiss_index.bin'
+metadata_path = data_path + 'video_metadata.npy'
