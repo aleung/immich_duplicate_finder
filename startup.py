@@ -1,21 +1,22 @@
+import os
 import streamlit as st
 import sqlite3
 from db import load_settings_from_db, save_settings_to_db,load_settings_from_db
 from utility import is_running_in_container
 
 def startup_sidebar():
+    logo_path = "https://immich.app/img/immich-logo-stacked-dark.svg"
+    st.sidebar.image(logo_path, width=150)
+
     if is_running_in_container():
         immich_server_url=os.environ['IMMICH_URL']
         api_key=os.environ['IMMICH_API_KEY']
         timeout=int(os.environ['IMMICH_API_TIMEOUT'])
         return immich_server_url, api_key, timeout
 
-    logo_path = "https://immich.app/img/immich-logo-stacked-dark.svg"
-    st.sidebar.image(logo_path, width=150)
-    st.sidebar.markdown("---")
-
     immich_server_url, api_key, images_folder, timeout = load_settings_from_db()
 
+    st.sidebar.markdown("---")
     with st.sidebar.expander("Login Settings", expanded=False):
         try:
             immich_server_url = st.text_input('IMMICH Server URL', immich_server_url).rstrip('/')
