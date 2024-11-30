@@ -2,7 +2,7 @@ import streamlit as st
 import os
 
 from api import fetchAssets
-from db import startup_db_configurations, startup_processed_assets_db, startup_processed_duplicate_faiss_db
+from db import startup_db_configurations, startup_processed_duplicate_faiss_db
 from startup import startup_sidebar
 from imageDuplicate import generate_db_duplicate,show_duplicate_photos_faiss,calculateFaissIndex
 
@@ -15,7 +15,6 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 st.set_page_config(page_title="Immich duplicator finder ", page_icon="https://immich.app/img/immich-logo-stacked-dark.svg")
 
 startup_db_configurations()
-startup_processed_assets_db()
 startup_processed_duplicate_faiss_db()
 immich_server_url, api_key, timeout = startup_sidebar()
 
@@ -91,7 +90,6 @@ def configure_sidebar():
         st.markdown(f"**Version:** {program_version}\n\n{additional_data}")
 
 def main():
-    #print(fetchAssets(immich_server_url, api_key,timeout, 'VIDEO'))
     setup_session_state()
     configure_sidebar()
     assets = None
@@ -107,8 +105,8 @@ def main():
     # Calculate the FAISS index if the corresponding flag is set
     if st.session_state['calculate_faiss'] and assets:
         calculateFaissIndex(
-            assets, 
-            immich_server_url, 
+            assets,
+            immich_server_url,
             api_key
         )
 
@@ -119,7 +117,7 @@ def main():
     # Show FAISS duplicate photos if the corresponding flag is set
     if st.session_state['show_faiss_duplicate'] and assets:
         show_duplicate_photos_faiss(
-            assets, st.session_state['limit'], 
+            assets, st.session_state['limit'],
             st.session_state['faiss_min_threshold'],
             st.session_state['faiss_max_threshold'],
             immich_server_url,
