@@ -1,10 +1,12 @@
-import sqlite3, json
+import sqlite3
+import json
 from collections import Counter
 from utility import is_running_in_container
 
 data_path = 'data/' if is_running_in_container() else ''
 
-#############DATABASE###################
+############# DATABASE###################
+
 
 def startup_db_configurations():
     conn = sqlite3.connect('settings.db')
@@ -31,6 +33,7 @@ def startup_db_configurations():
     conn.commit()
     conn.close()
 
+
 def load_settings_from_db():
     conn = sqlite3.connect('settings.db')
     c = conn.cursor()
@@ -39,12 +42,14 @@ def load_settings_from_db():
     conn.close()
     return settings if settings else (None, None, None, None)
 
+
 def save_settings_to_db(immich_server_url, api_key, images_folder, timeout):
     conn = sqlite3.connect('settings.db')
     c = conn.cursor()
     # This simple logic assumes one row of settings; adjust according to your needs
     c.execute("DELETE FROM settings")  # Clear existing settings
-    c.execute("INSERT INTO settings VALUES (?, ?, ?, ?)", (immich_server_url, api_key, images_folder, timeout))
+    c.execute("INSERT INTO settings VALUES (?, ?, ?, ?)",
+              (immich_server_url, api_key, images_folder, timeout))
     conn.commit()
     conn.close()
 
@@ -75,6 +80,7 @@ def startup_processed_duplicate_faiss_db():
     finally:
         conn.close()
 
+
 def save_duplicate_pair(vector_id1, vector_id2, similarity):
     similarity = float(similarity)
     try:
@@ -85,7 +91,7 @@ def save_duplicate_pair(vector_id1, vector_id2, similarity):
         cursor.execute("SELECT * FROM duplicates WHERE (vector_id1 = ? AND vector_id2 = ?) OR (vector_id1 = ? AND vector_id2 = ?)",
                        (vector_id1, vector_id2, vector_id2, vector_id1))
         if cursor.fetchone():
-            #print("Duplicate pair already exists.")
+            # print("Duplicate pair already exists.")
             return
 
         # If not, insert the new pair
@@ -97,18 +103,22 @@ def save_duplicate_pair(vector_id1, vector_id2, similarity):
     finally:
         conn.close()
 
+
 def delete_duplicate_pair(asset_id_1, asset_id_2):
     try:
         conn = sqlite3.connect(data_path + 'duplicates.db')
         cursor = conn.cursor()
         # Delete the specific duplicate entry involving the two asset IDs
-        cursor.execute("DELETE FROM duplicates WHERE (vector_id1 = ? AND vector_id2 = ?) OR (vector_id1 = ? AND vector_id2 = ?)", (asset_id_1, asset_id_2, asset_id_2, asset_id_1))
+        cursor.execute("DELETE FROM duplicates WHERE (vector_id1 = ? AND vector_id2 = ?) OR (vector_id1 = ? AND vector_id2 = ?)",
+                       (asset_id_1, asset_id_2, asset_id_2, asset_id_1))
         conn.commit()
         print("Deleted asset from db")
     except Exception as e:
-        print(f"Error deleting duplicate entries for asset pair {asset_id_1}-{asset_id_2}:", e)
+        print(
+            f"Error deleting duplicate entries for asset pair {asset_id_1}-{asset_id_2}:", e)
     finally:
         conn.close()
+
 
 def load_duplicate_pairs(min_threshold, max_threshold):
     """Load duplicate pairs with a similarity between the specified minimum and maximum thresholds."""
@@ -119,16 +129,18 @@ def load_duplicate_pairs(min_threshold, max_threshold):
         cursor.execute("""
             SELECT vector_id1, vector_id2 FROM duplicates
             WHERE similarity >= ? AND similarity <= ?""",
-            (min_threshold, max_threshold))
+                       (min_threshold, max_threshold))
         duplicates = cursor.fetchall()
         if not duplicates:
-            print(f"No duplicates found within thresholds {min_threshold} and {max_threshold}")
+            print(
+                f"No duplicates found within thresholds {min_threshold} and {max_threshold}")
         return duplicates
     except Exception as e:
         print("Error loading duplicates:", e)
     finally:
         if conn:
             conn.close()
+
 
 def is_db_populated():
     """Check if the 'duplicates' table in the database has any entries."""
@@ -146,6 +158,7 @@ def is_db_populated():
     finally:
         if conn:
             conn.close()
+
 
 def remove_deleted_assets_from_db(deleted_asset_ids):
     """Remove entries from the duplicates table that involve deleted assets."""
@@ -167,4 +180,3 @@ def remove_deleted_assets_from_db(deleted_asset_ids):
         print("Error removing deleted assets from duplicates db:", e)
     finally:
         conn.close()
-

@@ -1,7 +1,5 @@
 import streamlit as st
 import time
-from immichApi import streamAsset
-import gc
 from faissCalc import update_faiss_index
 
 
@@ -55,7 +53,8 @@ def calculateFaissIndex(assets):
         progress_percentage = (i + 1) / total_assets
         st.session_state['progress'] = progress_percentage
         progress_bar.progress(progress_percentage)
-        estimated_time_remaining = (total_time / (i + 1)) * (total_assets - (i + 1))
+        estimated_time_remaining = (
+            total_time / (i + 1)) * (total_assets - (i + 1))
         estimated_time_remaining_min = int(estimated_time_remaining / 60)
 
         st.session_state['message'] = f"Processing asset {i + 1}/{total_assets} - (Processed: {processed_assets}, Skipped: {skipped_assets}, Errors: {error_assets}). Estimated time remaining: {estimated_time_remaining_min} minutes."

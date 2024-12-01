@@ -1,10 +1,10 @@
 from datetime import datetime
-import streamlit as st
-from datetime import datetime
 import os
+
 
 def is_running_in_container():
     return os.path.exists('/.dockerenv')
+
 
 def compare_and_color_data(value1, value2):
     date1 = datetime.fromisoformat(value1.rstrip('Z'))
@@ -17,6 +17,7 @@ def compare_and_color_data(value1, value2):
         return f"<span style='color: green;'>{value1}</span>"
     else:  # They are the same
         return f"{value1}"
+
 
 def compare_and_color(value1, value2):
     if value1 > value2:

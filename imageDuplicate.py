@@ -22,11 +22,13 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 model = resnet152(weights=ResNet152_Weights.DEFAULT)
 model.eval()  # Set model to evaluation mode
 
+
 def convert_image_to_rgb(image):
     """Convert image to RGB if it's RGBA."""
     if image.mode == 'RGBA':
         return image.convert('RGB')
     return image
+
 
 transform = Compose([
     convert_image_to_rgb,
@@ -41,13 +43,13 @@ index_path = data_path + 'faiss_index.bin'
 metadata_path = data_path + 'metadata.npy'
 
 
-
 def extract_features(image):
     """Extract features from an image using a pretrained model."""
     image_tensor = transform(image).unsqueeze(0)  # Add batch dimension
     with torch.no_grad():
         features = model(image_tensor)
     return features.numpy().flatten()
+
 
 def init_or_load_faiss_index():
     """Initialize or load the FAISS index and metadata, ensuring index is ready for use."""
@@ -59,13 +61,14 @@ def init_or_load_faiss_index():
         metadata = []
     return index, metadata
 
+
 def save_faiss_index_and_metadata(index, metadata):
     """Save the FAISS index and metadata to disk."""
     faiss.write_index(index, index_path)
     np.save(metadata_path, np.array(metadata, dtype=object))
 
-def update_faiss_index(asset_id):
 
+def update_faiss_index(asset_id):
     """Update the FAISS index and metadata with a new image and its ID,
     skipping if the asset_id has already been processed."""
     global index  # Assuming index is defined globally
@@ -91,6 +94,7 @@ def update_faiss_index(asset_id):
 
     save_faiss_index_and_metadata(index, existing_metadata)
     return 'processed'
+
 
 def calculateFaissIndex(assets):
     # Initialize session state variables if they are not already set
@@ -142,7 +146,8 @@ def calculateFaissIndex(assets):
         progress_percentage = (i + 1) / total_assets
         st.session_state['progress'] = progress_percentage
         progress_bar.progress(progress_percentage)
-        estimated_time_remaining = (total_time / (i + 1)) * (total_assets - (i + 1))
+        estimated_time_remaining = (
+            total_time / (i + 1)) * (total_assets - (i + 1))
         estimated_time_remaining_min = int(estimated_time_remaining / 60)
 
         st.session_state['message'] = f"Processing asset {i + 1}/{total_assets} - (Processed: {processed_assets}, Skipped: {skipped_assets}, Errors: {error_assets}). Estimated time remaining: {estimated_time_remaining_min} minutes."
@@ -154,6 +159,7 @@ def calculateFaissIndex(assets):
         st.session_state['message'] = "Processing complete!"
         message_placeholder.text(st.session_state['message'])
         progress_bar.progress(1.0)
+
 
 def generate_db_duplicate():
     st.write("Database initialization")
@@ -185,20 +191,22 @@ def generate_db_duplicate():
             return None
 
         progress = (i + 1) / num_vectors
-        message_placeholder.text(f"Finding duplicates: processing vector {i+1} of {num_vectors}")
+        message_placeholder.text(
+            f"Finding duplicates: processing vector {i+1} of {num_vectors}")
         progress_bar.progress(progress)
 
         query_vector = np.array([index.reconstruct(i)])
         distances, indices = index.search(query_vector, 2)
 
         for j in range(1, indices.shape[1]):
-            #if distances[0][j] < threshold:
+            # if distances[0][j] < threshold:
             idx1, idx2 = i, indices[0][j]
             if idx1 != idx2:
                 sorted_pair = (min(idx1, idx2), max(idx1, idx2))
                 # Check if the indices in sorted_pair are within the bounds of metadata
                 if sorted_pair[0] < len(metadata) and sorted_pair[1] < len(metadata):
-                    save_duplicate_pair(metadata[sorted_pair[0]], metadata[sorted_pair[1]], distances[0][j])
+                    save_duplicate_pair(
+                        metadata[sorted_pair[0]], metadata[sorted_pair[1]], distances[0][j])
                 else:
                     st.error(f"Metadata index out of range: {sorted_pair}")
                     # Optionally log more details or handle this case further
@@ -233,6 +241,7 @@ def handle_deletion():
         st.success('Selected images have been deleted.')
         st.rerun()
 
+
 def cleanup_after_deletion():
     """Clean up session state after deletion."""
     st.session_state['selected_images'].clear()
@@ -240,10 +249,12 @@ def cleanup_after_deletion():
         if key.startswith('select_'):
             del st.session_state[key]
 
+
 def display_delete_form():
     """Display the deletion form with confirmation."""
     with st.form(key='delete_form'):
-        st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
+        st.warning(
+            'Are you sure you want to delete the selected images? This action cannot be undone.')
         confirm = st.checkbox('Yes, I want to delete the selected images.')
         submit_delete = st.form_submit_button('Delete selected images')
         if submit_delete:
@@ -251,6 +262,7 @@ def display_delete_form():
                 handle_deletion()
             else:
                 st.info('Please confirm deletion by checking the box above.')
+
 
 def display_selected_images():
     """Display currently selected images."""
@@ -261,6 +273,7 @@ def display_selected_images():
         return True
     st.write('No images selected for deletion.')
     return False
+
 
 def display_image_with_checkbox(column, image, asset_id):
     """
@@ -289,7 +302,8 @@ def display_image_with_checkbox(column, image, asset_id):
         else:
             st.session_state['selected_images'].discard(asset_id)
 
-def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2):
+
+def display_asset_column(col, asset1_info, asset2_info, asset_id_1, asset_id_2):
     details = f"""
     - **File name:** {asset1_info[1]}
     - **Original Path:** {asset1_info[5]}
@@ -313,8 +327,8 @@ def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2):
                     st.session_state[f'deleted_photo_{asset_id_1}'] = True
                     st.session_state['show_faiss_duplicate'] = True
                     st.session_state['generate_db_duplicate'] = False
-                    #remove from asset db
-                    delete_duplicate_pair(asset_id_1,asset_id_2)
+                    # remove from asset db
+                    delete_duplicate_pair(asset_id_1, asset_id_2)
                 else:
                     st.error(f"Failed to delete photo {asset_id_1}")
             except Exception as e:
@@ -328,7 +342,8 @@ def process_image_pair(asset_id_1, asset_id_2):
     asset2_info = getAssetInfo(asset_id_2)
 
     if not asset1_info or not asset2_info:
-        st.write(f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
+        st.write(
+            f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
         return
 
     image1 = getImage(asset_id_1, 'origin')
@@ -351,10 +366,14 @@ def process_image_pair(asset_id_1, asset_id_2):
         col1, col2 = st.columns(2)
         display_image_with_checkbox(col1, image1, asset_id_1)
         display_image_with_checkbox(col2, image2, asset_id_2)
-        display_asset_column(col1, asset1_info, asset2_info, asset_id_1, asset_id_2)
-        display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1)
+        display_asset_column(col1, asset1_info, asset2_info,
+                             asset_id_1, asset_id_2)
+        display_asset_column(col2, asset2_info, asset1_info,
+                             asset_id_2, asset_id_1)
     else:
-        st.write(f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
+        st.write(
+            f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
+
 
 def process_duplicate_pairs(duplicates, limit, progress_bar):
     """Process and display duplicate pairs of images with progress tracking."""
@@ -385,11 +404,13 @@ def process_duplicate_pairs(duplicates, limit, progress_bar):
 
     progress_bar.progress(100)
 
+
 def show_duplicate_photos_faiss(limit, min_threshold, max_threshold):
     initialize_session_state()
 
     if not is_db_populated():
-        st.write("The database does not contain any duplicate entries. Please generate/update the database.")
+        st.write(
+            "The database does not contain any duplicate entries. Please generate/update the database.")
         return
 
     # Load duplicates from database, excluding pairs with deleted assets
@@ -403,7 +424,8 @@ def show_duplicate_photos_faiss(limit, min_threshold, max_threshold):
         st.write("No duplicates found.")
         return
 
-    st.write(f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
+    st.write(
+        f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
 
     if display_selected_images():
         display_delete_form()
@@ -422,7 +444,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
 
     # First check if the database is populated
     if not is_db_populated():
-        st.write("The database does not contain any duplicate entries. Please generate/update the database.")
+        st.write(
+            "The database does not contain any duplicate entries. Please generate/update the database.")
         return  # Exit the function early if the database is not populated
 
     # Load duplicates from database, excluding pairs with deleted assets
@@ -433,7 +456,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
     ]
 
     if duplicates:
-        st.write(f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
+        st.write(
+            f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
 
         # Add buttons and delete functionality at the top
         col_select_all, col_deselect_all, col_delete = st.columns(3)
@@ -453,7 +477,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                             st.session_state['selected_images'].add(asset_id_1)
                             images_selected = True
                     else:
-                        st.write(f"Asset info not found for asset_id: {asset_id_1}")
+                        st.write(
+                            f"Asset info not found for asset_id: {asset_id_1}")
 
                     # Handle asset2_info
                     if asset2_info:
@@ -462,7 +487,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                             st.session_state['selected_images'].add(asset_id_2)
                             images_selected = True
                     else:
-                        st.write(f"Asset info not found for asset_id: {asset_id_2}")
+                        st.write(
+                            f"Asset info not found for asset_id: {asset_id_2}")
 
                 if not images_selected:
                     st.info("No duplicates found in /libraries/Recovered.")
@@ -480,19 +506,23 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                     if asset1_info:
                         original_path_1 = asset1_info[5]
                         if original_path_1.startswith('/libraries/Recovered'):
-                            st.session_state['selected_images'].discard(asset_id_1)
+                            st.session_state['selected_images'].discard(
+                                asset_id_1)
                             images_deselected = True
                     else:
-                        st.write(f"Asset info not found for asset_id: {asset_id_1}")
+                        st.write(
+                            f"Asset info not found for asset_id: {asset_id_1}")
 
                     # Handle asset2_info
                     if asset2_info:
                         original_path_2 = asset2_info[5]
                         if original_path_2.startswith('/libraries/Recovered'):
-                            st.session_state['selected_images'].discard(asset_id_2)
+                            st.session_state['selected_images'].discard(
+                                asset_id_2)
                             images_deselected = True
                     else:
-                        st.write(f"Asset info not found for asset_id: {asset_id_2}")
+                        st.write(
+                            f"Asset info not found for asset_id: {asset_id_2}")
 
                 if not images_deselected:
                     st.info("No images to deselect in /libraries/Recovered.")
@@ -505,24 +535,29 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
 
             # Use a form to group delete button and confirmation checkbox
             with st.form(key='delete_form'):
-                st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
-                confirm = st.checkbox('Yes, I want to delete the selected images.')
+                st.warning(
+                    'Are you sure you want to delete the selected images? This action cannot be undone.')
+                confirm = st.checkbox(
+                    'Yes, I want to delete the selected images.')
                 submit_delete = st.form_submit_button('Delete selected images')
                 if submit_delete:
                     if confirm:
                         # Proceed with deletion
                         deleted_asset_ids = []
                         for asset_id in st.session_state['selected_images']:
-                            deletion_result = deleteAsset(immich_server_url, asset_id, api_key)
+                            deletion_result = deleteAsset(
+                                immich_server_url, asset_id, api_key)
                             if deletion_result:
                                 deleted_asset_ids.append(asset_id)
                             else:
-                                st.error(f"Failed to delete asset with ID: {asset_id}")
+                                st.error(
+                                    f"Failed to delete asset with ID: {asset_id}")
                         if deleted_asset_ids:
                             # Update the duplicates database
                             remove_deleted_assets_from_db(deleted_asset_ids)
                             # Update deleted assets in session state
-                            st.session_state['deleted_assets'].update(deleted_asset_ids)
+                            st.session_state['deleted_assets'].update(
+                                deleted_asset_ids)
                         st.success('Selected images have been deleted.')
                         st.session_state['selected_images'].clear()
                         # Reset individual checkbox states
@@ -532,7 +567,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                         # Refresh the display by rerunning the function
                         st.rerun()
                     else:
-                        st.info('Please confirm deletion by checking the box above.')
+                        st.info(
+                            'Please confirm deletion by checking the box above.')
         else:
             st.write('No images selected for deletion.')
 
@@ -544,7 +580,8 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                 # Check if stop was requested
                 if st.session_state.get('stop_requested', False):
                     st.write("Processing was stopped by the user.")
-                    st.session_state['stop_requested'] = False  # Reset the flag for future operations
+                    # Reset the flag for future operations
+                    st.session_state['stop_requested'] = False
                     st.session_state['generate_db_duplicate'] = False
                     break  # Exit the loop
 
@@ -558,11 +595,14 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
 
                 # Skip if asset info is missing
                 if not asset1_info or not asset2_info:
-                    st.write(f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
+                    st.write(
+                        f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
                     continue
 
-                image1 = getImage(asset_id_1, immich_server_url, 'origin', api_key)
-                image2 = getImage(asset_id_2, immich_server_url, 'origin', api_key)
+                image1 = getImage(
+                    asset_id_1, immich_server_url, 'origin', api_key)
+                image2 = getImage(
+                    asset_id_2, immich_server_url, 'origin', api_key)
 
                 if image1 is not None and image2 is not None:
                     # Convert PIL images to numpy arrays if necessary
@@ -587,18 +627,21 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                     # Display first image and its checkbox
                     with col1:
                         st.image(image1, caption=f"Name: {asset_id_1}")
-                        original_path_1 = asset1_info[5]  # original_path is the 6th item
+                        # original_path is the 6th item
+                        original_path_1 = asset1_info[5]
                         checkbox_key_1 = f'select_{asset_id_1}'
                         # Set checkbox value based on whether asset_id_1 is in selected_images
                         selected_1 = st.checkbox(
                             f'Select for deletion',
-                            value=(asset_id_1 in st.session_state['selected_images']),
+                            value=(
+                                asset_id_1 in st.session_state['selected_images']),
                             key=checkbox_key_1
                         )
                         if selected_1:
                             st.session_state['selected_images'].add(asset_id_1)
                         else:
-                            st.session_state['selected_images'].discard(asset_id_1)
+                            st.session_state['selected_images'].discard(
+                                asset_id_1)
 
                     # Display second image and its checkbox
                     with col2:
@@ -607,19 +650,24 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
                         checkbox_key_2 = f'select_{asset_id_2}'
                         selected_2 = st.checkbox(
                             f'Select for deletion (Path: {original_path_2})',
-                            value=(asset_id_2 in st.session_state['selected_images']),
+                            value=(
+                                asset_id_2 in st.session_state['selected_images']),
                             key=checkbox_key_2
                         )
                         if selected_2:
                             st.session_state['selected_images'].add(asset_id_2)
                         else:
-                            st.session_state['selected_images'].discard(asset_id_2)
+                            st.session_state['selected_images'].discard(
+                                asset_id_2)
 
-                    display_asset_column(col1, asset1_info, asset2_info, asset_id_1, asset_id_2, immich_server_url, api_key)
-                    display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1, immich_server_url, api_key)
+                    display_asset_column(
+                        col1, asset1_info, asset2_info, asset_id_1, asset_id_2, immich_server_url, api_key)
+                    display_asset_column(
+                        col2, asset2_info, asset1_info, asset_id_2, asset_id_1, immich_server_url, api_key)
 
                 else:
-                    st.write(f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
+                    st.write(
+                        f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
 
                 st.markdown("---")
             except Exception as e:
@@ -627,4 +675,3 @@ def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold,
         progress_bar.progress(100)
     else:
         st.write("No duplicates found.")
-
