@@ -5,7 +5,7 @@ import gc
 from faissCalc import update_faiss_index
 
 
-def calculateFaissIndex(assets, immich_server_url, api_key):
+def calculateFaissIndex(assets):
     # Initialize session state variables if they are not already set
     if 'message' not in st.session_state:
         st.session_state['message'] = ""
@@ -39,7 +39,7 @@ def calculateFaissIndex(assets, immich_server_url, api_key):
         asset_id = asset.get('id')
         start_time = time.time()
 
-        status = update_faiss_index(immich_server_url,api_key, asset_id)
+        status = update_faiss_index(asset_id)
         if status == 'processed':
             processed_assets += 1
         elif status == 'skipped':

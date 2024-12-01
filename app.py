@@ -1,22 +1,24 @@
 import streamlit as st
 import os
 
-from api import fetchAssets
+from api import fetchAssets, api_init
 from db import startup_db_configurations, startup_processed_duplicate_faiss_db
 from startup import startup_sidebar
-from imageDuplicate import generate_db_duplicate,show_duplicate_photos_faiss,calculateFaissIndex
+from imageDuplicate import generate_db_duplicate, show_duplicate_photos_faiss, calculateFaissIndex
 
 
 # Set the environment variable to allow multiple OpenMP libraries
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-###############STARTUP#####################
+############### STARTUP#####################
 
 # Set page title and favicon
-st.set_page_config(page_title="Immich duplicator finder ", page_icon="https://immich.app/img/immich-logo-stacked-dark.svg", layout="wide")
+st.set_page_config(page_title="Immich duplicator finder ",
+                   page_icon="https://immich.app/img/immich-logo-stacked-dark.svg", layout="wide")
 
 startup_db_configurations()
 startup_processed_duplicate_faiss_db()
 immich_server_url, api_key, timeout = startup_sidebar()
+
 
 def setup_session_state():
     """Initialize session state with default values."""
@@ -32,13 +34,15 @@ def setup_session_state():
         'avoid_thumbnail_jpeg': True,
         'is_trashed': False,
         'is_favorite': True,
-        'stop_process' : False,
-        'stop_index' : False,
-        'photo_choice': 'Thumbnail (fast)'  # Initialize with default action to not show duplicates
+        'stop_process': False,
+        'stop_index': False,
+        # Initialize with default action to not show duplicates
+        'photo_choice': 'Thumbnail (fast)'
     }
     for key, default_value in session_defaults.items():
         if key not in st.session_state:
             st.session_state[key] = default_value
+
 
 def configure_sidebar():
     """Configure the sidebar for user inputs."""
@@ -89,43 +93,42 @@ def configure_sidebar():
         additional_data = "Immich duplicator finder"
         st.markdown(f"**Version:** {program_version}\n\n{additional_data}")
 
+
 def main():
     setup_session_state()
     configure_sidebar()
     assets = None
 
+    api_init(immich_server_url, api_key, timeout)
+
     # Attempt to fetch assets if any asset-related operation is to be performed
-    if st.session_state['calculate_faiss'] or st.session_state['generate_db_duplicate'] or st.session_state['show_faiss_duplicate']:
-        assets = fetchAssets(immich_server_url, api_key,timeout, 'IMAGE')
+    if st.session_state['calculate_faiss']:
+        assets = fetchAssets('IMAGE')
         if not assets:
             st.error("No assets found or failed to fetch assets.")
             return  # Stop further execution since there are no assets to process
 
         # Remove deleted assets from the assets list
         if 'deleted_assets' in st.session_state:
-            assets = [asset for asset in assets if asset['id'] not in st.session_state['deleted_assets']]
+            assets = [asset for asset in assets if asset['id']
+                      not in st.session_state['deleted_assets']]
 
     # Calculate the FAISS index if the corresponding flag is set
     if st.session_state['calculate_faiss'] and assets:
-        calculateFaissIndex(
-            assets,
-            immich_server_url,
-            api_key
-        )
+        calculateFaissIndex(assets)
 
     # Show FAISS duplicate photos if the corresponding flag is set
     if st.session_state['generate_db_duplicate']:
         generate_db_duplicate()
 
     # Show FAISS duplicate photos if the corresponding flag is set
-    if st.session_state['show_faiss_duplicate'] and assets:
+    if st.session_state['show_faiss_duplicate']:
         show_duplicate_photos_faiss(
-            assets, st.session_state['limit'],
+            st.session_state['limit'],
             st.session_state['faiss_min_threshold'],
             st.session_state['faiss_max_threshold'],
-            immich_server_url,
-            api_key
         )
+
 
 if __name__ == "__main__":
     main()

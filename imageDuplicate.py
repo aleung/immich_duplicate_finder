@@ -64,7 +64,7 @@ def save_faiss_index_and_metadata(index, metadata):
     faiss.write_index(index, index_path)
     np.save(metadata_path, np.array(metadata, dtype=object))
 
-def update_faiss_index(immich_server_url,api_key, asset_id):
+def update_faiss_index(asset_id):
 
     """Update the FAISS index and metadata with a new image and its ID,
     skipping if the asset_id has already been processed."""
@@ -75,7 +75,7 @@ def update_faiss_index(immich_server_url,api_key, asset_id):
     if asset_id in existing_metadata:
         return 'skipped'  # Skip processing this image
 
-    image = getImage(asset_id, immich_server_url, "Thumbnail (fast)", api_key)
+    image = getImage(asset_id, "Thumbnail (fast)")
     if image is not None:
         features = extract_features(image)
     else:
@@ -92,7 +92,7 @@ def update_faiss_index(immich_server_url,api_key, asset_id):
     save_faiss_index_and_metadata(index, existing_metadata)
     return 'processed'
 
-def calculateFaissIndex(assets, immich_server_url, api_key):
+def calculateFaissIndex(assets):
     # Initialize session state variables if they are not already set
     if 'message' not in st.session_state:
         st.session_state['message'] = ""
@@ -126,7 +126,7 @@ def calculateFaissIndex(assets, immich_server_url, api_key):
         asset_id = asset.get('id')
         start_time = time.time()
 
-        status = update_faiss_index(immich_server_url,api_key, asset_id)
+        status = update_faiss_index(asset_id)
         if status == 'processed':
             processed_assets += 1
         elif status == 'skipped':
@@ -217,11 +217,11 @@ def initialize_session_state():
         st.session_state['deleted_assets'] = set()
 
 
-def handle_deletion(immich_server_url, api_key):
+def handle_deletion():
     """Handle the deletion of selected images."""
     deleted_asset_ids = []
     for asset_id in st.session_state['selected_images']:
-        if deleteAsset(immich_server_url, asset_id, api_key):
+        if deleteAsset(asset_id):
             deleted_asset_ids.append(asset_id)
         else:
             st.error(f"Failed to delete asset with ID: {asset_id}")
@@ -240,7 +240,7 @@ def cleanup_after_deletion():
         if key.startswith('select_'):
             del st.session_state[key]
 
-def display_delete_form(immich_server_url, api_key):
+def display_delete_form():
     """Display the deletion form with confirmation."""
     with st.form(key='delete_form'):
         st.warning('Are you sure you want to delete the selected images? This action cannot be undone.')
@@ -248,7 +248,7 @@ def display_delete_form(immich_server_url, api_key):
         submit_delete = st.form_submit_button('Delete selected images')
         if submit_delete:
             if confirm:
-                handle_deletion(immich_server_url, api_key)
+                handle_deletion()
             else:
                 st.info('Please confirm deletion by checking the box above.')
 
@@ -289,15 +289,15 @@ def display_image_with_checkbox(column, image, asset_id):
         else:
             st.session_state['selected_images'].discard(asset_id)
 
-def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2, server_url, api_key):
+def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2):
     details = f"""
     - **File name:** {asset1_info[1]}
+    - **Original Path:** {asset1_info[5]}
     - **ID:** {asset_id_1}
     - **Size:** {compare_and_color(asset1_info[0], asset2_info[0])}
     - **Resolution:** {compare_and_color(asset1_info[2], asset2_info[2])}
     - **Lens Model:** {asset1_info[3]}
     - **Taken At:** {compare_and_color_data(asset1_info[4], asset2_info[4])}
-    - **Original Path:** {asset1_info[5]}
     - **Is Offline:** {'Yes' if asset1_info[6] else 'No'}
     - **Is Trashed:** {'Yes' if asset1_info[7] else 'No'}
     - **Is Favorite:** {'Yes' if asset1_info[8] else 'No'}
@@ -308,7 +308,7 @@ def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2, s
         delete_button_label = f"Delete"
         if st.button(delete_button_label, key=delete_button_key):
             try:
-                if deleteAsset(server_url, asset_id_1, api_key):
+                if deleteAsset(asset_id_1):
                     st.success(f"Deleted photo {asset_id_1}")
                     st.session_state[f'deleted_photo_{asset_id_1}'] = True
                     st.session_state['show_faiss_duplicate'] = True
@@ -322,26 +322,26 @@ def display_asset_column(col, asset1_info, asset2_info, asset_id_1,asset_id_2, s
                 print(f"Failed to delete photo {asset_id_1}: {str(e)}")
 
 
-def process_image_pair(asset_id_1, asset_id_2, assets, immich_server_url, api_key):
+def process_image_pair(asset_id_1, asset_id_2):
     """Process and display a pair of images with their information."""
-    asset1_info = getAssetInfo(asset_id_1, assets)
-    asset2_info = getAssetInfo(asset_id_2, assets)
+    asset1_info = getAssetInfo(asset_id_1)
+    asset2_info = getAssetInfo(asset_id_2)
 
     if not asset1_info or not asset2_info:
         st.write(f"Skipping pair due to missing asset info: {asset_id_1}, {asset_id_2}")
         return
 
-    image1 = getImage(asset_id_1, immich_server_url, 'origin', api_key)
-    image2 = getImage(asset_id_2, immich_server_url, 'origin', api_key)
+    image1 = getImage(asset_id_1, 'origin')
+    image2 = getImage(asset_id_2, 'origin')
 
     if image1 is not None and image2 is not None:
         # Proceed with image comparison
         image_comparison(
             img1=np.array(image1),
             img2=np.array(image2),
-            label1=f"Name: {asset_id_1}",
-            label2=f"Name: {asset_id_2}",
-            width=700,
+            label1=f"Name: {asset1_info[1]}",
+            label2=f"Name: {asset2_info[1]}",
+            width=1000,
             starting_position=50,
             show_labels=True,
             make_responsive=True,
@@ -351,13 +351,12 @@ def process_image_pair(asset_id_1, asset_id_2, assets, immich_server_url, api_ke
         col1, col2 = st.columns(2)
         display_image_with_checkbox(col1, image1, asset_id_1)
         display_image_with_checkbox(col2, image2, asset_id_2)
-
-        display_asset_column(col1, asset1_info, asset2_info, asset_id_1, asset_id_2, immich_server_url, api_key)
-        display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1, immich_server_url, api_key)
+        display_asset_column(col1, asset1_info, asset2_info, asset_id_1, asset_id_2)
+        display_asset_column(col2, asset2_info, asset1_info, asset_id_2, asset_id_1)
     else:
         st.write(f"Missing images for one or both assets: {asset_id_1}, {asset_id_2}")
 
-def process_duplicate_pairs(duplicates, limit, assets, immich_server_url, api_key, progress_bar):
+def process_duplicate_pairs(duplicates, limit, progress_bar):
     """Process and display duplicate pairs of images with progress tracking."""
     num_duplicates_to_show = min(len(duplicates), limit)
 
@@ -376,13 +375,7 @@ def process_duplicate_pairs(duplicates, limit, assets, immich_server_url, api_ke
 
             # Process the pair
             asset_id_1, asset_id_2 = dup_pair
-            process_image_pair(
-                asset_id_1,
-                asset_id_2,
-                assets,
-                immich_server_url,
-                api_key
-            )
+            process_image_pair(asset_id_1, asset_id_2)
 
             st.markdown("---")  # Add separator between pairs
 
@@ -392,7 +385,7 @@ def process_duplicate_pairs(duplicates, limit, assets, immich_server_url, api_ke
 
     progress_bar.progress(100)
 
-def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, immich_server_url, api_key):
+def show_duplicate_photos_faiss(limit, min_threshold, max_threshold):
     initialize_session_state()
 
     if not is_db_populated():
@@ -413,12 +406,13 @@ def show_duplicate_photos_faiss(assets, limit, min_threshold, max_threshold, imm
     st.write(f"Found {len(duplicates)} duplicate pairs with FAISS code within threshold {min_threshold} < x < {max_threshold}:")
 
     if display_selected_images():
-        display_delete_form(immich_server_url, api_key)
+        display_delete_form()
 
     progress_bar = st.progress(0)
-    process_duplicate_pairs(duplicates, limit, assets, immich_server_url, api_key, progress_bar)
+    process_duplicate_pairs(duplicates, limit, progress_bar)
 
 
+# TODO: remove it
 def show_duplicate_photos_faiss_old(assets, limit, min_threshold, max_threshold, immich_server_url, api_key):
     # Initialize selected_images in session_state
     if 'selected_images' not in st.session_state:

@@ -6,8 +6,26 @@ from db import bytes_to_megabytes
 from pillow_heif import register_heif_opener
 import os
 
+# module scope
+assets = []
+base_url = None
+api_key = None
+timeout = None
+
+
+def api_init(immich_server_url, immich_api_key, api_timeout):
+    global base_url, api_key, timeout
+
+    # Remove trailing slash from immich_server_url if present
+    base_url = immich_server_url.rstrip('/') + '/api'
+    api_key = immich_api_key
+    timeout = api_timeout
+
+
 @st.cache_data(show_spinner=True)
-def fetchAssets(immich_server_url, api_key, timeout, type):
+def fetchAssets(type):
+    global assets
+    
     # Initialize messaging and progress
     if 'fetch_message' not in st.session_state:
         st.session_state['fetch_message'] = ""
@@ -16,10 +34,8 @@ def fetchAssets(immich_server_url, api_key, timeout, type):
     # Initialize assets to None or an empty list, depending on your usage expectation
     assets = []
 
-    # Remove trailing slash from immich_server_url if present
-    base_url = immich_server_url.rstrip('/')
-    asset_paths_url = f"{base_url}/api/view/folder/unique-paths"
-    asset_info_url = f"{base_url}/api/view/folder"
+    asset_paths_url = f"{base_url}/view/folder/unique-paths"
+    asset_info_url = f"{base_url}/view/folder"
 
     try:
         with st.spinner('Fetching assets...'):
@@ -72,14 +88,14 @@ def fetchAssets(immich_server_url, api_key, timeout, type):
     message_placeholder.text(st.session_state['fetch_message'])
     return assets
 
-def getImage(asset_id, immich_server_url,photo_choice,api_key):
+def getImage(asset_id, photo_choice):
     # Determine whether to fetch the original or thumbnail based on user selection
     register_heif_opener()
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     if photo_choice == 'Thumbnail (fast)':
-        response = requests.request("GET", f"{immich_server_url}/api/assets/{asset_id}/thumbnail?size=thumbnail", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
+        response = requests.request("GET", f"{base_url}/assets/{asset_id}/thumbnail?size=thumbnail", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
     else:
-        response = requests.request("GET", f"{immich_server_url}/api/assets/{asset_id}/original", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
+        response = requests.request("GET", f"{base_url}/assets/{asset_id}/original", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
 
     if response.status_code == 200 and 'image/' in response.headers.get('Content-Type', ''):
         image_bytes = BytesIO(response.content)
@@ -99,9 +115,20 @@ def getImage(asset_id, immich_server_url,photo_choice,api_key):
         print(f"Skipping non-image asset_id {asset_id} with Content-Type: {response.headers.get('Content-Type')}")
         return None
 
-def getAssetInfo(asset_id, assets):
+@st.cache_data
+def fetch_asset_info(asset_id):
+    asset_info_url = f"{base_url}/assets/{asset_id}"
+    response = requests.get(asset_info_url, headers={'Accept': 'application/json', 'x-api-key': api_key}, verify=False, timeout=timeout)
+    response.raise_for_status()  # This will raise an exception for HTTP errors
+    return response.json()
+
+
+def getAssetInfo(asset_id):
     # Search for the asset in the provided list of assets.
     asset_info = next((asset for asset in assets if asset['id'] == asset_id), None)
+
+    if not asset_info:
+        asset_info = fetch_asset_info(asset_id)
 
     if asset_info:
         # Extract all required info.
@@ -127,19 +154,10 @@ def getAssetInfo(asset_id, assets):
     else:
         return None
 
-def getServerStatistics(immich_server_url, api_key):
-    try:
-        response = requests.get(f"{immich_server_url}/api/server-info/statistics", headers={'Accept': 'application/json', 'x-api-key': api_key})
-        if response.ok:
-            return response.json()  # This will parse the JSON response body and return it as a dictionary
-        else:
-            return None
-    except:
-        return None
 
-def deleteAsset(immich_server_url, asset_id, api_key):
+def deleteAsset(asset_id):
     st.session_state['show_faiss_duplicate'] = False
-    url = f"{immich_server_url}/api/assets"
+    url = f"{base_url}/assets"
     payload = json.dumps({
         "force": True,
         "ids": [asset_id]
@@ -170,8 +188,8 @@ def deleteAsset(immich_server_url, asset_id, api_key):
         print(f"Request failed: {str(e)}")
         return False
 
-def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, description, isFavorite, latitude, longitude, isArchived):
-    url = f"{immich_server_url}/api/assets/{asset_id}"  # Ensure the URL is constructed correctly
+def updateAsset(asset_id, dateTimeOriginal, description, isFavorite, latitude, longitude, isArchived):
+    url = f"{base_url}/assets/{asset_id}"  # Ensure the URL is constructed correctly
 
     payload = json.dumps({
         "dateTimeOriginal": dateTimeOriginal,
@@ -206,12 +224,12 @@ def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, descript
         return False
 
 #For video function
-def getVideoAndSave(asset_id, immich_server_url,api_key,save_directory):
+def getVideoAndSave(asset_id, save_directory):
     # Ensure the directory exists
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
 
-    response = requests.get(f"{immich_server_url}/api/download/assets/{asset_id}", headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
+    response = requests.get(f"{base_url}/download/assets/{asset_id}", headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
     file_path = os.path.join(save_directory, f"{asset_id}.mp4")
 
     if response.status_code == 200 and 'video/' in response.headers.get('Content-Type', ''):
