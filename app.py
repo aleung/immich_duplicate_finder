@@ -12,7 +12,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 ###############STARTUP#####################
 
 # Set page title and favicon
-st.set_page_config(page_title="Immich duplicator finder ", page_icon="https://immich.app/img/immich-logo-stacked-dark.svg")
+st.set_page_config(page_title="Immich duplicator finder ", page_icon="https://immich.app/img/immich-logo-stacked-dark.svg", layout="wide")
 
 startup_db_configurations()
 startup_processed_duplicate_faiss_db()
@@ -100,7 +100,7 @@ def main():
         if not assets:
             st.error("No assets found or failed to fetch assets.")
             return  # Stop further execution since there are no assets to process
-        
+
         # Remove deleted assets from the assets list
         if 'deleted_assets' in st.session_state:
             assets = [asset for asset in assets if asset['id'] not in st.session_state['deleted_assets']]

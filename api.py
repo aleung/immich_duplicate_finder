@@ -72,16 +72,15 @@ def fetchAssets(immich_server_url, api_key, timeout, type):
     message_placeholder.text(st.session_state['fetch_message'])
     return assets
 
-def getImage(asset_id, immich_server_url,photo_choice,api_key):   
+def getImage(asset_id, immich_server_url,photo_choice,api_key):
     # Determine whether to fetch the original or thumbnail based on user selection
     register_heif_opener()
     ImageFile.LOAD_TRUNCATED_IMAGES = True
     if photo_choice == 'Thumbnail (fast)':
         response = requests.request("GET", f"{immich_server_url}/api/assets/{asset_id}/thumbnail?size=thumbnail", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
     else:
-        asset_download_url = f"{immich_server_url}/api/download/assets/{asset_id}"
-        response = requests.post(asset_download_url, headers={'Accept': 'application/octet-stream', 'x-api-key': api_key}, stream=True)
-        
+        response = requests.request("GET", f"{immich_server_url}/api/assets/{asset_id}/original", headers={'Accept': 'application/octet-stream','x-api-key': api_key}, data={})
+
     if response.status_code == 200 and 'image/' in response.headers.get('Content-Type', ''):
         image_bytes = BytesIO(response.content)
         try:
@@ -95,7 +94,7 @@ def getImage(asset_id, immich_server_url,photo_choice,api_key):
             return None
         finally:
             image_bytes.close()  # Ensure the stream is always closed
-            del image_bytes 
+            del image_bytes
     else:
         print(f"Skipping non-image asset_id {asset_id} with Content-Type: {response.headers.get('Content-Type')}")
         return None
@@ -110,27 +109,28 @@ def getAssetInfo(asset_id, assets):
             formatted_file_size = bytes_to_megabytes(asset_info['exifInfo']['fileSizeInByte'])
         except KeyError:
             formatted_file_size = "Unknown"
-        
+
         original_file_name = asset_info.get('originalFileName', 'Unknown')
         resolution = "{} x {}".format(
-            asset_info.get('exifInfo', {}).get('exifImageHeight', 'Unknown'), 
+            asset_info.get('exifInfo', {}).get('exifImageHeight', 'Unknown'),
             asset_info.get('exifInfo', {}).get('exifImageWidth', 'Unknown')
         )
         lens_model = asset_info.get('exifInfo', {}).get('lensModel', 'Unknown')
         creation_date = asset_info.get('fileCreatedAt', 'Unknown')
+        date_time_original = asset_info.get('exifInfo', {'dateTimeOriginal': creation_date}).get('dateTimeOriginal', 'Unknown')
         original_path = asset_info.get('originalPath', 'Unknown')
         is_offline = asset_info.get('isOffline', False)
         is_trashed = asset_info.get('isTrashed', False)  # Extract isTrashed
-        is_favorite = asset_info.get('isFavorite', False)        
+        is_favorite = asset_info.get('isFavorite', False)
         # Add more fields as needed and return them
-        return formatted_file_size, original_file_name, resolution, lens_model, creation_date, original_path, is_offline, is_trashed,is_favorite
+        return formatted_file_size, original_file_name, resolution, lens_model, date_time_original, original_path, is_offline, is_trashed,is_favorite
     else:
         return None
-    
+
 def getServerStatistics(immich_server_url, api_key):
     try:
         response = requests.get(f"{immich_server_url}/api/server-info/statistics", headers={'Accept': 'application/json', 'x-api-key': api_key})
-        if response.ok:        
+        if response.ok:
             return response.json()  # This will parse the JSON response body and return it as a dictionary
         else:
             return None
@@ -172,7 +172,7 @@ def deleteAsset(immich_server_url, asset_id, api_key):
 
 def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, description, isFavorite, latitude, longitude, isArchived):
     url = f"{immich_server_url}/api/assets/{asset_id}"  # Ensure the URL is constructed correctly
-    
+
     payload = json.dumps({
         "dateTimeOriginal": dateTimeOriginal,
         "description": description,
@@ -181,7 +181,7 @@ def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, descript
         "latitude": latitude,
         "longitude": longitude
     })
-    
+
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -204,9 +204,9 @@ def updateAsset(immich_server_url, asset_id, api_key, dateTimeOriginal, descript
         st.error(f"Request failed: {str(e)}")
         print(f"Request failed: {str(e)}")
         return False
-    
+
 #For video function
-def getVideoAndSave(asset_id, immich_server_url,api_key,save_directory):   
+def getVideoAndSave(asset_id, immich_server_url,api_key,save_directory):
     # Ensure the directory exists
     if not os.path.exists(save_directory):
         os.makedirs(save_directory)
